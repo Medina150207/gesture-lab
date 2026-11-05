@@ -1,0 +1,102 @@
+<!DOCTYPE html><html lang="en"><meta charset="utf-8"><title>Medina — A2 report sections</title><style>body{font:16px/1.65 Georgia,serif;max-width:900px;margin:40px auto;color:#222;padding:24px}h1,h2{font-family:Arial}table{border-collapse:collapse;width:100%;font:13px Arial}th,td{border:1px solid #bbb;padding:8px}img{max-width:100%}.note{background:#f4edf6;padding:18px}@media print{body{margin:0}h2{break-after:avoid}img,table{break-inside:avoid}}</style><p><a href="SYNTHETIC_REPORT.html">NEW: completed synthetic-frame ablation and results</a>. The sections below document the earlier real-only reference stage.</p><h1>Hand Gesture Recognition: Reference Models and Interactive Demo</h1><p>Sapabekova Medina · ST-2405 · Computer Vision Assignment 2</p><p class="note">Medina’s completed sections. The final joint report still needs Aiganym’s new SOTA method, ablation, and joint conclusions. This is not the complete 6–8-page submission.</p>
+<h2>1. Dataset preparation</h2><p>We combined our two collections. The final dataset contains 761 real images: 335 from Medina and 426 from Aiganym, including seven HEIC images not counted in her 419-image A1 run. The classes are peace, stop and thumbs up. We converted images to RGB JPEG, corrected EXIF orientation and limited the long side to 1024 pixels. No image was enlarged at this stage.</p><p>We found no exact duplicate decoded images. We linked 13 near-image pairs using a perceptual hash distance of at most 6 and a grayscale thumbnail mean absolute difference of at most 0.04. We kept the similar images in the same split. Medina’s filename-based series also stayed together. The split has 535 training, 114 validation and 112 test images. It was selected using class and source counts, not model results.</p><p>These groups are not verified person identities. Some photos of the same person or session may appear across splits, especially in Aiganym’s collection. The data were studied in A1. We therefore need new participants and recording sessions for an independent generalisation test.</p>
+<h2>2. Reference models and training</h2><p>We used ImageNet-pretrained ResNet18 and MobileNetV2. Both backbones were frozen, including batch-normalisation statistics. We trained their three-class heads with Adam, learning rate 0.001 and batch size 32 for 40 epochs. We selected the epoch with the lowest validation loss. The random seed was 42.</p><p>Input images were padded to 160 × 160 with a grey background and normalised using ImageNet mean and standard deviation. Each training image had its original view and one fixed augmented view with random flip, affine changes and brightness/contrast changes. Features were computed once and reused. These are classifier-head learning curves, not full-network fine-tuning curves.</p><p>This protocol standardises the new A2 reference runs. It does not exactly reproduce A1: Medina previously used 224-pixel ResNet18 inputs, and Aiganym fine-tuned MobileNetV2. The new comparison must not be described as the isolated effect of a SOTA component.</p><h2>3. Results on the common test set</h2>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>model</th>
+      <th>accuracy</th>
+      <th>macro_precision</th>
+      <th>macro_recall</th>
+      <th>macro_f1</th>
+      <th>best_epoch</th>
+      <th>mean_forward_ms</th>
+      <th>test_images</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>resnet18</td>
+      <td>0.9018</td>
+      <td>0.9058</td>
+      <td>0.9038</td>
+      <td>0.9023</td>
+      <td>24</td>
+      <td>21.7753</td>
+      <td>112</td>
+    </tr>
+    <tr>
+      <td>mobilenet_v2</td>
+      <td>0.9196</td>
+      <td>0.9209</td>
+      <td>0.9208</td>
+      <td>0.9204</td>
+      <td>26</td>
+      <td>16.0781</td>
+      <td>112</td>
+    </tr>
+  </tbody>
+</table>
+<p>Both models use the same 112 real test images. The table reports macro averages, so each class has equal importance. One test image changes accuracy by about 0.89 percentage points. This is a single-seed experiment; a small difference is not evidence of a general model ranking.</p>
+<h3>resnet18</h3><img src="results/resnet18_curves.png"><img src="results/resnet18_confusion.png">
+<h3>mobilenet_v2</h3><img src="results/mobilenet_v2_curves.png"><img src="results/mobilenet_v2_confusion.png">
+<h2>4. Controlled robustness checks</h2><p>We repeated evaluation after reducing brightness to 50% and after Gaussian blur with radius 2 on the 160-pixel image. These are artificial image transformations, not measured real environmental categories. No model settings were selected using these tests. New scenes and backgrounds remain a required follow-up for stronger environmental claims.</p>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>model</th>
+      <th>condition</th>
+      <th>accuracy</th>
+      <th>macro_f1</th>
+      <th>n</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>resnet18</td>
+      <td>original</td>
+      <td>0.9018</td>
+      <td>0.9023</td>
+      <td>112</td>
+    </tr>
+    <tr>
+      <td>resnet18</td>
+      <td>dark_50pct</td>
+      <td>0.8750</td>
+      <td>0.8773</td>
+      <td>112</td>
+    </tr>
+    <tr>
+      <td>resnet18</td>
+      <td>blur_radius2</td>
+      <td>0.8125</td>
+      <td>0.8022</td>
+      <td>112</td>
+    </tr>
+    <tr>
+      <td>mobilenet_v2</td>
+      <td>original</td>
+      <td>0.9196</td>
+      <td>0.9204</td>
+      <td>112</td>
+    </tr>
+    <tr>
+      <td>mobilenet_v2</td>
+      <td>dark_50pct</td>
+      <td>0.8929</td>
+      <td>0.8933</td>
+      <td>112</td>
+    </tr>
+    <tr>
+      <td>mobilenet_v2</td>
+      <td>blur_radius2</td>
+      <td>0.8214</td>
+      <td>0.8193</td>
+      <td>112</td>
+    </tr>
+  </tbody>
+</table>
+<h2>5. Interactive application and explanation</h2><p>The local Streamlit application accepts uploaded JPEG/PNG images and camera snapshots. It shows the predicted gesture, the three model scores, the forward-pass latency and a Grad-CAM overlay for the predicted class. It also contains the measured comparison and training plots. The weights are included, so the app does not retrain during use.</p><p>Grad-CAM uses gradients of the selected logit with respect to the last convolutional features. Average gradients weight each feature map, followed by ReLU and resizing. Warm regions show positive influence on the class score. The heatmap is not a segmentation mask and does not prove that the model has learned the correct concept.</p><p>Latency is measured after one warm-up pass on CPU. It excludes image decoding, preprocessing and Grad-CAM; Grad-CAM time is displayed separately. The benchmark averages 20 images. Hardware and background load affect these values. The camera function takes a still photograph; it is not real-time video tracking.</p>
+<img src="results/resnet18_gradcam.png" alt="resnet18 Grad-CAM example">
+<img src="results/mobilenet_v2_gradcam.png" alt="mobilenet_v2 Grad-CAM example">
+<h2>6. Limitations, ethics and next steps</h2><p>The model chooses among three known gestures, even for unknown gestures or images without a hand. A low-confidence warning is only an interface setting, not a validated rejection model. Softmax scores are not calibrated probabilities of correctness. Multiple hands, busy backgrounds and new users need further evaluation.</p><p>We used no generated images in these reference runs. Participant consent and publication rights must be confirmed before sharing the dataset publicly. With local execution, uploaded images are processed on the user’s computer. Aiganym’s SOTA component, its ablation and synthetic-media disclosure will be documented separately before the final submission.</p><h2>7. Reproducibility</h2><p>Install requirements.txt and run <code>python -m streamlit run app.py</code>. To reproduce training, place the prepared dataset beside the project and run <code>python train.py --data ../Gesture_A2_Data</code>, followed by <code>python check_and_stress.py</code>. The original manifest fixes the splits. Saved outputs contain histories, test predictions, metrics, checkpoints and environment details.</p><h2>Implementation references</h2><ul><li>ResNet: He et al., Deep Residual Learning for Image Recognition, CVPR 2016.</li><li>MobileNetV2: Sandler et al., Inverted Residuals and Linear Bottlenecks, CVPR 2018.</li><li>Grad-CAM: Selvaraju et al., Visual Explanations from Deep Networks via Gradient-based Localization, ICCV 2017.</li></ul></html>

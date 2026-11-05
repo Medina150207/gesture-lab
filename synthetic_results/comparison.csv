@@ -1,0 +1,2 @@
+model,accuracy,macro_precision,macro_recall,macro_f1,best_epoch,mean_forward_ms,test_images
+mobilenet_v2,0.9107142857142857,0.9120978120978122,0.912714723331653,0.9115805946791863,37,12.78451465004764,112

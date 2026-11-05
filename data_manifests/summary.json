@@ -1,0 +1,33 @@
+{
+  "total": 761,
+  "exact_duplicates_removed": 0,
+  "excluded": 0,
+  "near_pairs_grouped": 13,
+  "groups": 439,
+  "class_to_index": {
+    "peace": 0,
+    "stop": 1,
+    "thumbs_up": 2
+  },
+  "split_counts": {
+    "train": {
+      "peace": 171,
+      "stop": 177,
+      "thumbs_up": 187
+    },
+    "validation": {
+      "peace": 40,
+      "stop": 38,
+      "thumbs_up": 36
+    },
+    "test": {
+      "peace": 41,
+      "stop": 34,
+      "thumbs_up": 37
+    }
+  },
+  "source_counts": {
+    "medina": 335,
+    "aiganym": 426
+  }
+}

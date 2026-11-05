@@ -1,0 +1,22 @@
+name: Assemble uploaded model
+on:
+  push:
+    branches: [main]
+    paths: ['.upload-parts/**']
+permissions:
+  contents: write
+jobs:
+  assemble:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore and verify original model
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .upload-parts/resnet18.00{0,1,2,3,4} > results/resnet18.pt
+          echo "bf70a2c095d83aa2b9cb40795a37e25f963176b945a4eb13c08878bf4ad2d751  results/resnet18.pt" | sha256sum --check
+          git rm .upload-parts/resnet18.00{0,1,2,3,4}
+          git add results/resnet18.pt
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Restore verified ResNet18 model from upload parts"
+          git push origin HEAD:main

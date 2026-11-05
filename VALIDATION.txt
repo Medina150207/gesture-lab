@@ -1,0 +1,2 @@
+Passed: syntax compilation; full model training; checkpoint reload; exact agreement of reloaded predictions with saved test predictions; finite Grad-CAM outputs; Streamlit AppTest example recognition for both models.
+Not verified: physical webcam and browser permissions on the user laptop.

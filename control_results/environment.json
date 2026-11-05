@@ -1,0 +1,9 @@
+{
+  "python": "3.12.14",
+  "torch": "2.15.0+cpu",
+  "device": "CPU",
+  "threads": 2,
+  "seed": 42,
+  "input_size": 160,
+  "latency": "mean of 20 warmed single-image forwards; excludes decode, preprocessing and Grad-CAM"
+}
