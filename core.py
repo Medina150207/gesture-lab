@@ -35,12 +35,19 @@ def load(path):
     net=build(ck['architecture']);net.load_state_dict(ck['state_dict']);net.eval()
     return net,ck
 
-def predict(net,image,explain=True):
+def predict(net,image,explain=True,repeats=1):
+    if not isinstance(repeats, int) or not 1 <= repeats <= 100:
+        raise ValueError('repeats must be an integer between 1 and 100')
     x=tensor(image).unsqueeze(0)
     with torch.no_grad():net(x) # warm-up excluded from timing
-    start=time.perf_counter()
-    with torch.no_grad():probs=net(x).softmax(1)[0].numpy()
-    elapsed=(time.perf_counter()-start)*1000
+    timings=[]
+    with torch.no_grad():
+        for _ in range(repeats):
+            start=time.perf_counter()
+            logits=net(x)
+            timings.append((time.perf_counter()-start)*1000)
+        probs=logits.softmax(1)[0].numpy()
+    elapsed=float(np.mean(timings))
     overlay=None;cam=None;cam_ms=None
     if explain:
         start=time.perf_counter();saved={}

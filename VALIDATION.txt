@@ -1,2 +1,10 @@
-Passed: syntax compilation; full model training; checkpoint reload; exact agreement of reloaded predictions with saved test predictions; finite Grad-CAM outputs; Streamlit AppTest example recognition for both models.
-Not verified: physical webcam and browser permissions on the user laptop.
+Current application checks — 2026-11-05
+
+Python 3.12.14, torch 2.15.0+cpu, torchvision 0.29.2+cpu, Streamlit 1.66.1, Windows.
+Installed requirements.txt in a separate clean virtual environment.
+Passed: Python syntax; all three shipped models on all three included example photos; finite scores and Grad-CAM; mean inference over 20 warmed forward passes; preserved prediction after threshold changes; stale prediction hidden after model/input changes; stress-test execution and reset; all evidence pages; field-test form consent gate; duplicate replacement; accuracy and three-class macro-F1 calculations; empty/partial-class samples; CSV export; clearing the session log; browser/OS parsing.
+Browser check: local application loaded, example recognition returned a gesture and mean latency, runtime/browser displayed, comparison page rendered.
+
+No new training was performed in this update. Saved metrics, model weights and datasets are unchanged.
+Historical project validation records reported training, checkpoint reload and agreement with saved test predictions; these historical training checks were not rerun in this update.
+Not verified: physical webcam and its permissions on the user's/friend's device, accuracy on new participants, participant consent, synthetic generator identity, exact A1 baseline comparison. Final report and demo video are not supplied by these tests.

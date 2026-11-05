@@ -5,11 +5,12 @@ import torch
 import streamlit as st
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter
 from core import load, predict, CLASSES
+from app_views import show_environment, record_field_test, show_field_tests, show_comparison, show_method
 
 ROOT = Path(__file__).parent
 torch.set_num_threads(2)
 st.set_page_config(page_title='Gesture Lab', page_icon='✋', layout='wide')
-st.markdown('<style>' + (ROOT/'style.css').read_text() + '</style>', unsafe_allow_html=True)
+st.markdown('<style>' + (ROOT/'style.css').read_text(encoding='utf-8') + '</style>', unsafe_allow_html=True)
 LABELS = {'resnet18':'ResNet18', 'mobilenet_v2':'MobileNetV2', 'mobilenet_v2_synthetic':'MobileNetV2 + synthetic'}
 GESTURES = {'peace':'Peace', 'stop':'Stop', 'thumbs_up':'Thumbs up'}
 ICONS = {'peace':'✌', 'stop':'✋', 'thumbs_up':'👍'}
@@ -23,15 +24,19 @@ def get_model(name):
 def infer(image):
     net, lock = get_model(name)
     with lock:
-        return predict(net, image)
+        return predict(net, image, repeats=20)
 
 def show_result(result, key):
     probs, ms, overlay, cam, cam_ms = result
     gesture = CLASSES[int(probs.argmax())]
-    st.markdown(f'<div class="prediction"><div class="gesture-icon">{ICONS[gesture]}</div><div><div class="result-label">{GESTURES[gesture]}</div><div class="muted">Model confidence</div><div class="score">{probs.max():.1%}</div></div></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="prediction"><div class="gesture-icon">{ICONS[gesture]}</div><div><div class="result-label">{GESTURES[gesture]}</div><div class="muted">Model score</div><div class="score">{probs.max():.1%}</div></div></div>', unsafe_allow_html=True)
     for label, prob in zip(CLASSES, probs):
         st.markdown(f'<div class="prob-row"><span>{GESTURES[label]}</span><div class="track"><div style="width:{float(prob)*100:.3f}%"></div></div><span>{prob:.1%}</span></div>', unsafe_allow_html=True)
-    st.caption(f'{LABELS[name]} · Inference {ms:.1f} ms')
+    st.metric('Mean inference · 20 runs', f'{ms:.1f} ms')
+    st.caption(f'{LABELS[name]} · CPU · one warm-up excluded. Mean of 20 forward passes on this image; excludes preprocessing, softmax and Grad-CAM.')
+    st.caption('Scores are not calibrated probabilities of correctness. Only one hand and the three supported gestures are evaluated.')
+    if name == 'mobilenet_v2_synthetic':
+        st.info('Training includes 36 synthetic frames. Generator identity is unverified; this is not evidence of a confirmed SOTA method.')
     if probs.max() < threshold:
         st.warning('Low confidence. Try better light or a clearer hand position.')
     with st.expander('View explanation · Grad-CAM'):
@@ -45,12 +50,13 @@ def show_result(result, key):
 
 with st.sidebar:
     st.markdown('<div class="brand"><span>✧</span> Gesture Lab</div>', unsafe_allow_html=True)
-    page = st.radio('Navigation', ['Recognize','Model comparison','How it works'], label_visibility='collapsed')
+    page = st.radio('Navigation', ['Recognize','Model comparison','Field tests','How it works'], label_visibility='collapsed', key='page')
     st.divider()
     st.subheader('Recognition settings')
-    name = st.selectbox('Model', list(LABELS), format_func=LABELS.get)
-    threshold = st.slider('Confidence warning', 0., 1., .6, .05)
+    name = st.selectbox('Model', list(LABELS), format_func=LABELS.get, key='model')
+    threshold = st.slider('Confidence warning', 0., 1., .6, .05, key='threshold')
     st.caption('Warn when the model score falls below this value.')
+    environment = show_environment()
     st.markdown('<div class="sidebar-footer">AITU · Computer Vision<br>Medina Sapabekova<br>Aiganym Alshynova</div>', unsafe_allow_html=True)
 
 st.markdown('<div class="eyebrow">HAND GESTURE RECOGNITION</div>', unsafe_allow_html=True)
@@ -62,16 +68,19 @@ if page == 'Recognize':
     identity = None
     with left, st.container(border=True, key='input_card'):
         st.subheader('Your image')
-        mode = st.radio('Input', ['Upload photo','Camera','Examples'], horizontal=True, label_visibility='collapsed')
+        mode = st.radio('Input', ['Upload photo','Camera','Examples'], horizontal=True, label_visibility='collapsed', key='input_mode')
+        st.caption('Use photos with permission. Images are processed on the computer hosting this app and are not intentionally saved to disk by the app.')
         file = None
         if mode == 'Upload photo':
             file = st.file_uploader('Choose a photo of one hand', type=['jpg','jpeg','png'], label_visibility='collapsed')
         elif mode == 'Camera':
             file = st.camera_input('Take a snapshot of one hand')
+            st.caption('Camera takes a still photo. Allow browser permission; a hosted app needs HTTPS, local use works on localhost.')
         else:
             choices = sorted((ROOT/'examples').glob('*.jpg'))
             if choices:
-                file = st.selectbox('Example photo', choices, format_func=lambda p:p.stem.replace('_',' '))
+                file = st.selectbox('Example photo', choices, format_func=lambda p:p.stem.replace('_',' '), key='example')
+                st.caption('Real validation examples for demonstration; these are not new independent test images.')
         if file is not None:
             try:
                 raw = file.read_bytes() if isinstance(file, Path) else file.getvalue()
@@ -88,7 +97,8 @@ if page == 'Recognize':
                 st.error(f'Could not open this image: {exc}')
         else:
             st.markdown('<div class="empty-upload"><div>✋</div><h3>Your next gesture starts here</h3><p>Add a photo, take a snapshot<br>or explore an example.</p></div>', unsafe_allow_html=True)
-        if st.button('Recognize gesture', type='primary', width="stretch", disabled=image is None):
+        if st.button('Recognize gesture', type='primary', width="stretch", disabled=image is None, key='recognize'):
+            st.session_state.pop('recognition', None)
             with st.spinner('Recognizing your gesture…'):
                 try:
                     st.session_state.recognition = (identity, infer(image))
@@ -99,6 +109,8 @@ if page == 'Recognize':
         stored = st.session_state.get('recognition')
         if stored and image is not None and stored[0] == identity:
             show_result(stored[1], 'download_main')
+            if mode != 'Examples':
+                record_field_test(hashlib.sha256(raw).hexdigest(), name, stored[1], environment, mode)
         else:
             st.markdown('<div class="empty-result"><div class="waiting-icon">✧</div><h3>A little moment of discovery</h3><p>Your gesture, confidence score and<br>visual explanation will appear here.</p><div class="class-pills"><span>✌ Peace</span><span>✋ Stop</span><span>👍 Thumbs up</span></div></div>', unsafe_allow_html=True)
     with st.container(border=True, key='stress_card'):
@@ -116,9 +128,10 @@ if page == 'Recognize':
                 st.session_state.brightness = 1.
                 st.session_state.blur = 0.
                 st.session_state.pop('stress_result', None)
-            st.button('Reset', on_click=reset_stress, width="stretch")
-            run_stress = st.button('Run test', disabled=image is None, width="stretch")
+            st.button('Reset', on_click=reset_stress, width="stretch", key='reset_stress')
+            run_stress = st.button('Run test', disabled=image is None, width="stretch", key='run_stress')
         if run_stress:
+            st.session_state.pop('stress_result', None)
             altered = ImageEnhance.Brightness(image).enhance(brightness).filter(ImageFilter.GaussianBlur(blur))
             with st.spinner('Testing the altered image…'):
                 try:
@@ -132,27 +145,9 @@ if page == 'Recognize':
             with b: show_result(stress[4], 'download_stress')
         st.caption('Simulated lighting and blur. These adjustments are not ArtAug or video generation.')
 elif page == 'Model comparison':
-    with st.container(border=True):
-        st.subheader('Model comparison')
-        p = ROOT/'results'/'comparison.csv'
-        if p.exists():
-            st.dataframe(pd.read_csv(p), hide_index=True, width='stretch')
-            st.caption('Same fixed 112-image real test split. Frozen ImageNet backbones with trained classification heads; A2 reference runs.')
-            for suffix in ['curves','confusion']:
-                cols = st.columns(2)
-                for col, model in zip(cols, ['resnet18','mobilenet_v2']):
-                    path = ROOT/'results'/f'{model}_{suffix}.png'
-                    if path.exists(): col.image(str(path), width='stretch')
-        st.subheader('Synthetic-data ablation')
-        p = ROOT/'ablation.csv'
-        if p.exists(): st.dataframe(pd.read_csv(p), hide_index=True, width='stretch')
-        st.caption('36 selected synthetic frames, 12 per class. Same real validation/test split. Fixed 40 epochs; adding data also adds optimizer updates. Generator identity remains unconfirmed.')
+    show_comparison(ROOT)
+elif page == 'Field tests':
+    show_field_tests()
 else:
-    with st.container(border=True):
-        st.subheader('How it works')
-        st.write('Photo → RGB and aspect-preserving padding → 160 × 160 → ImageNet normalization → model → class scores → Grad-CAM.')
-        st.write('Supported gestures: peace, stop and thumbs up. The model always chooses one of these classes. Other gestures, empty frames or multiple hands may produce confident errors.')
-        st.write('The camera takes a snapshot, not live video. The confidence warning is a display setting, not an unknown-gesture detector.')
-        st.write('Reference models use real images. The synthetic variant adds 36 selected generated frames. New-user performance is not established because complete participant IDs were unavailable.')
-        st.write('With local launch, your photos are processed on your computer. Use photos with permission.')
+    show_method(ROOT)
 st.markdown('<div class="bottom-note">GESTURE LAB &nbsp; · &nbsp; AITU / COMPUTER VISION / ASSIGNMENT 2</div>', unsafe_allow_html=True)
