@@ -68,7 +68,9 @@ if page == 'Recognize':
     identity = None
     with left, st.container(border=True, key='input_card'):
         st.subheader('Your image')
-        mode = st.radio('Input', ['Upload photo','Camera','Examples'], horizontal=True, label_visibility='collapsed', key='input_mode')
+        choices = sorted((ROOT/'examples').glob('*.jpg'))
+        modes = ['Examples', 'Upload photo', 'Camera'] if choices else ['Upload photo', 'Camera']
+        mode = st.radio('Input', modes, horizontal=True, label_visibility='collapsed', key='input_mode')
         st.caption('Use photos with permission. Images are processed on the computer hosting this app and are not intentionally saved to disk by the app.')
         file = None
         if mode == 'Upload photo':
@@ -77,10 +79,8 @@ if page == 'Recognize':
             file = st.camera_input('Take a snapshot of one hand')
             st.caption('Camera takes a still photo. Allow browser permission; a hosted app needs HTTPS, local use works on localhost.')
         else:
-            choices = sorted((ROOT/'examples').glob('*.jpg'))
-            if choices:
-                file = st.radio('Example photo', choices, format_func=lambda p:p.stem.replace('_',' '), key='example', horizontal=True)
-                st.caption('Real validation examples for demonstration; these are not new independent test images.')
+            file = st.radio('Example photo', choices, format_func=lambda p:p.stem.replace('_',' '), key='example', horizontal=True)
+            st.caption('Real validation examples for demonstration; these are not new independent test images.')
         if file is not None:
             try:
                 raw = file.read_bytes() if isinstance(file, Path) else file.getvalue()
@@ -131,7 +131,11 @@ if page == 'Recognize':
             st.button('Reset', on_click=reset_stress, width="stretch", key='reset_stress')
             run_stress = st.button('Run test', disabled=image is None, width="stretch", key='run_stress')
         if image is None:
-            st.caption('Choose a photo above to preview changes.')
+            st.caption('Add a photo above to enable Brightness and Blur.')
+            if choices:
+                def use_example():
+                    st.session_state.input_mode = 'Examples'
+                st.button('Try an example photo', on_click=use_example)
         else:
             original = prepare(image)
             altered = ImageEnhance.Brightness(original).enhance(brightness)
