@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+mkdir -p "$HOME/.jupyter"
+cp binder/jupyter_server_config.py "$HOME/.jupyter/jupyter_server_config.py"

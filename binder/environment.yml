@@ -1,0 +1,14 @@
+name: gesture-lab
+dependencies:
+  - python=3.12
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+      - torch==2.15.0+cpu
+      - torchvision==0.29.2+cpu
+      - streamlit==1.66.1
+      - numpy==2.3.5
+      - pandas==2.2.3
+      - Pillow==12.3.0
+      - matplotlib==3.10.8
+      - jupyter-server-proxy>=4,<5
