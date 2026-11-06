@@ -1,8 +1,12 @@
 """Run with python test_app.py. Uses shipped weights, no training/downloads."""
 from pathlib import Path
+import base64
 import csv
 import io
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
+from PIL import Image
 import numpy as np
 from streamlit.testing.v1 import AppTest
 from evaluation import CLASSES, CONDITIONS, add_observation, client_environment, export_csv, summarize
@@ -73,8 +77,8 @@ record_field_test('photo1', 'mobilenet_v2', (np.array([.8,.1,.1]), 5., None, Non
 def test_recognition():
     at = AppTest.from_file(str(ROOT/'app.py'), default_timeout=120).run()
     assert_clean(at)
-    assert at.button(key='recognize').disabled
-    at.radio(key='input_mode').set_value('Examples').run()
+    assert at.radio(key='input_mode').value == 'Examples'
+    assert not at.button(key='recognize').disabled
     for model in ['resnet18', 'mobilenet_v2', 'mobilenet_v2_synthetic']:
         at.radio(key='model').set_value(model).run()
         if 'recognition' in at.session_state:
@@ -92,16 +96,22 @@ def test_recognition():
         identity = at.session_state['recognition'][0]
         at.slider(key='threshold').set_value(.95).run()
         assert at.session_state['recognition'][0] == identity and at.metric
-        at.slider(key='brightness').set_value(.5).run()
-        at.button(key='run_stress').click().run()
-        assert_clean(at)
-        assert at.session_state['stress_result'][1] == .5
-        at.slider(key='blur').set_value(2.).run()
-        assert len(at.metric) == 1, 'Changed stress settings must hide the previous stress result'
-        at.button(key='reset_stress').click().run()
-        assert at.slider(key='brightness').value == 1.
-        assert at.slider(key='blur').value == 0.
-        assert 'stress_result' not in at.session_state
+        picture = io.BytesIO()
+        Image.new('RGB', (160, 160), (64, 100, 120)).save(picture, format='PNG')
+        settings = [.5, 2.]
+        payload = dict(settings=settings, pixels=base64.b64encode(picture.getvalue()).decode('ascii'))
+        editor = SimpleNamespace(test=payload, reset=False, settings=settings)
+        with patch('stress_editor.render_editor', return_value=editor):
+            at.run()
+            assert_clean(at)
+            assert at.session_state['stress_result'][1] == settings and len(at.metric) == 2
+            editor.test = None
+            editor.settings = [1., 3.]
+            at.run()
+            assert len(at.metric) == 1, 'Hide a prediction for different settings'
+            editor.reset = True
+            at.run()
+            assert 'stress_result' not in at.session_state
         print('PASS recognition + Grad-CAM + stress:', model, flush=True)
     at.radio(key='input_mode').set_value('Upload photo').run()
     assert not at.metric and at.button(key='recognize').disabled

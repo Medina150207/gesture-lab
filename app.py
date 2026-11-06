@@ -3,8 +3,9 @@ import io, threading, hashlib
 import pandas as pd
 import torch
 import streamlit as st
-from PIL import Image, ImageOps, ImageEnhance, ImageFilter
-from core import load, predict, prepare, CLASSES
+from PIL import Image, ImageOps
+from core import load, predict, CLASSES
+from stress_editor import render_editor, tested_photo
 from app_views import show_environment, record_field_test, show_field_tests, show_comparison, show_method
 
 ROOT = Path(__file__).parent
@@ -89,15 +90,27 @@ if page == 'Recognize':
                 if source.width * source.height > 30_000_000:
                     raise ValueError('Please use an image smaller than 30 megapixels.')
                 image = ImageOps.exif_transpose(source).convert('RGB')
-                preview = ImageOps.contain(image, (900, 520))
-                canvas = Image.new('RGB', (900,520), '#f7eff7')
-                canvas.paste(preview, ((900-preview.width)//2,(520-preview.height)//2))
-                st.image(canvas, width='stretch')
             except Exception as exc:
                 st.error(f'Could not open this image: {exc}')
         else:
             st.markdown('<div class="empty-upload"><div>✋</div><h3>Your next gesture starts here</h3><p>Add a photo, take a snapshot<br>or explore an example.</p></div>', unsafe_allow_html=True)
-        if st.button('Recognize gesture', type='primary', width="stretch", disabled=image is None, key='recognize'):
+        if image is not None:
+            st.subheader('Stress-test')
+            editor = render_editor(image, identity)
+            if editor.reset:
+                st.session_state.pop('stress_result', None)
+            if editor.test:
+                with st.spinner('Testing the adjusted photo…'):
+                    try:
+                        adjusted, settings = tested_photo(editor.test)
+                        st.session_state.stress_result = (identity, settings, infer(adjusted))
+                    except Exception as exc:
+                        st.error(f'Stress test failed: {exc}')
+        elif choices:
+            def use_example():
+                st.session_state.input_mode = 'Examples'
+            st.button('Try an example photo', on_click=use_example)
+        if st.button('Recognize original photo', type='primary', width="stretch", disabled=image is None, key='recognize'):
             st.session_state.pop('recognition', None)
             with st.spinner('Recognizing your gesture…'):
                 try:
@@ -106,56 +119,18 @@ if page == 'Recognize':
                     st.error(f'Recognition failed: {exc}')
     with right, st.container(border=True, key='result_card'):
         st.subheader('Recognition result')
+        stress = st.session_state.get('stress_result')
+        if image is not None and stress and stress[:2] == (identity, editor.settings):
+            st.subheader('Adjusted image result')
+            show_result(stress[2], 'download_stress')
         stored = st.session_state.get('recognition')
         if stored and image is not None and stored[0] == identity:
+            st.subheader('Original photo result')
             show_result(stored[1], 'download_main')
             if mode != 'Examples':
                 record_field_test(hashlib.sha256(raw).hexdigest(), name, stored[1], environment, mode)
-        else:
+        elif image is None or not stress or stress[:2] != (identity, editor.settings):
             st.markdown('<div class="empty-result"><div class="waiting-icon">✧</div><h3>A little moment of discovery</h3><p>Your gesture, confidence score and<br>visual explanation will appear here.</p><div class="class-pills"><span>✌ Peace</span><span>✋ Stop</span><span>👍 Thumbs up</span></div></div>', unsafe_allow_html=True)
-    with st.container(border=True, key='stress_card'):
-        title, controls, action = st.columns([1.15, 1.6, .6], gap='large')
-        with title:
-            st.subheader('Stress-test')
-            st.caption('Adjust the sliders to preview the model input. Run test predicts the gesture in the adjusted image.')
-        with controls:
-            st.session_state.setdefault('brightness', 1.)
-            st.session_state.setdefault('blur', 0.)
-            brightness = st.slider('Brightness', .2, 1.5, step=.1, key='brightness', disabled=image is None, format='%.1f×')
-            blur = st.slider('Blur', 0., 4., step=.5, key='blur', disabled=image is None, format='%.1f px')
-        with action:
-            def reset_stress():
-                st.session_state.brightness = 1.
-                st.session_state.blur = 0.
-                st.session_state.pop('stress_result', None)
-            st.button('Reset', on_click=reset_stress, width="stretch", key='reset_stress')
-            run_stress = st.button('Run test', disabled=image is None, width="stretch", key='run_stress')
-        if image is None:
-            st.caption('Add a photo above to enable Brightness and Blur.')
-            if choices:
-                def use_example():
-                    st.session_state.input_mode = 'Examples'
-                st.button('Try an example photo', on_click=use_example)
-        else:
-            original = prepare(image)
-            altered = ImageEnhance.Brightness(original).enhance(brightness)
-            if blur > 0:
-                altered = altered.filter(ImageFilter.GaussianBlur(blur))
-            before, after = st.columns(2)
-            before.image(original, width=240, caption='Original model input')
-            after.image(altered, width=240, caption=f'Adjusted · brightness {brightness:.1f}× · blur {blur:.1f} px')
-        if run_stress and image is not None:
-            st.session_state.pop('stress_result', None)
-            with st.spinner('Testing the altered image…'):
-                try:
-                    st.session_state.stress_result = (identity, brightness, blur, infer(altered))
-                except Exception as exc:
-                    st.error(f'Stress test failed: {exc}')
-        stress = st.session_state.get('stress_result')
-        if stress and image is not None and stress[:3] == (identity, brightness, blur):
-            st.subheader('Adjusted image result')
-            show_result(stress[3], 'download_stress')
-        st.caption('Simulated lighting and blur. These adjustments are not ArtAug or video generation.')
 elif page == 'Model comparison':
     show_comparison(ROOT)
 elif page == 'Field tests':
