@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 import streamlit as st
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter
-from core import load, predict, CLASSES
+from core import load, predict, prepare, CLASSES
 from app_views import show_environment, record_field_test, show_field_tests, show_comparison, show_method
 
 ROOT = Path(__file__).parent
@@ -53,7 +53,7 @@ with st.sidebar:
     page = st.radio('Navigation', ['Recognize','Model comparison','Field tests','How it works'], label_visibility='collapsed', key='page')
     st.divider()
     st.subheader('Recognition settings')
-    name = st.selectbox('Model', list(LABELS), format_func=LABELS.get, key='model')
+    name = st.radio('Model', list(LABELS), format_func=LABELS.get, key='model')
     threshold = st.slider('Confidence warning', 0., 1., .6, .05, key='threshold')
     st.caption('Warn when the model score falls below this value.')
     environment = show_environment()
@@ -79,7 +79,7 @@ if page == 'Recognize':
         else:
             choices = sorted((ROOT/'examples').glob('*.jpg'))
             if choices:
-                file = st.selectbox('Example photo', choices, format_func=lambda p:p.stem.replace('_',' '), key='example')
+                file = st.radio('Example photo', choices, format_func=lambda p:p.stem.replace('_',' '), key='example', horizontal=True)
                 st.caption('Real validation examples for demonstration; these are not new independent test images.')
         if file is not None:
             try:
@@ -117,12 +117,12 @@ if page == 'Recognize':
         title, controls, action = st.columns([1.15, 1.6, .6], gap='large')
         with title:
             st.subheader('Stress-test')
-            st.caption('Explore changes in lighting and blur.')
+            st.caption('Adjust the sliders to preview the model input. Run test predicts the gesture in the adjusted image.')
         with controls:
             st.session_state.setdefault('brightness', 1.)
             st.session_state.setdefault('blur', 0.)
-            brightness = st.slider('Brightness', .2, 1.5, step=.1, key='brightness')
-            blur = st.slider('Blur', 0., 4., step=.5, key='blur')
+            brightness = st.slider('Brightness', .2, 1.5, step=.1, key='brightness', disabled=image is None, format='%.1f×')
+            blur = st.slider('Blur', 0., 4., step=.5, key='blur', disabled=image is None, format='%.1f px')
         with action:
             def reset_stress():
                 st.session_state.brightness = 1.
@@ -130,19 +130,27 @@ if page == 'Recognize':
                 st.session_state.pop('stress_result', None)
             st.button('Reset', on_click=reset_stress, width="stretch", key='reset_stress')
             run_stress = st.button('Run test', disabled=image is None, width="stretch", key='run_stress')
-        if run_stress:
+        if image is None:
+            st.caption('Choose a photo above to preview changes.')
+        else:
+            original = prepare(image)
+            altered = ImageEnhance.Brightness(original).enhance(brightness)
+            if blur > 0:
+                altered = altered.filter(ImageFilter.GaussianBlur(blur))
+            before, after = st.columns(2)
+            before.image(original, width=240, caption='Original model input')
+            after.image(altered, width=240, caption=f'Adjusted · brightness {brightness:.1f}× · blur {blur:.1f} px')
+        if run_stress and image is not None:
             st.session_state.pop('stress_result', None)
-            altered = ImageEnhance.Brightness(image).enhance(brightness).filter(ImageFilter.GaussianBlur(blur))
             with st.spinner('Testing the altered image…'):
                 try:
-                    st.session_state.stress_result = (identity, brightness, blur, altered, infer(altered))
+                    st.session_state.stress_result = (identity, brightness, blur, infer(altered))
                 except Exception as exc:
                     st.error(f'Stress test failed: {exc}')
         stress = st.session_state.get('stress_result')
         if stress and image is not None and stress[:3] == (identity, brightness, blur):
-            a,b = st.columns(2)
-            with a: st.image(stress[3], width=330, caption='Altered input')
-            with b: show_result(stress[4], 'download_stress')
+            st.subheader('Adjusted image result')
+            show_result(stress[3], 'download_stress')
         st.caption('Simulated lighting and blur. These adjustments are not ArtAug or video generation.')
 elif page == 'Model comparison':
     show_comparison(ROOT)

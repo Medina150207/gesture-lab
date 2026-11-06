@@ -76,11 +76,11 @@ def test_recognition():
     assert at.button(key='recognize').disabled
     at.radio(key='input_mode').set_value('Examples').run()
     for model in ['resnet18', 'mobilenet_v2', 'mobilenet_v2_synthetic']:
-        at.selectbox(key='model').set_value(model).run()
+        at.radio(key='model').set_value(model).run()
         if 'recognition' in at.session_state:
             assert not at.metric, 'Changing model must hide the previous prediction'
         for example in sorted((ROOT/'examples').glob('*.jpg')):
-            at.selectbox(key='example').set_value(example).run()
+            at.radio(key='example').set_value(example).run()
             at.button(key='recognize').click().run()
             assert_clean(at)
             _, result = at.session_state['recognition']
